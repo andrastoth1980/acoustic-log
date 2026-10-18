@@ -1,0 +1,32 @@
+{
+  "name": "AcousticLog – Audiological Spectrum Detective & Fitting Assistant",
+  "short_name": "AcousticLog",
+  "description": "Offline-first audiological spectrum analyzer, acoustic symptom logger, and hearing aid fitting assistant.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090d16",
+  "theme_color": "#0891b2",
+  "categories": ["medical", "health", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23090d16'/%3E%3Ccircle cx='256' cy='256' r='208' fill='none' stroke='%230e7490' stroke-width='12' opacity='0.4'/%3E%3Crect x='96' y='280' width='28' height='104' rx='14' fill='%2306b6d4'/%3E%3Crect x='144' y='224' width='28' height='160' rx='14' fill='%2306b6d4'/%3E%3Crect x='192' y='176' width='28' height='208' rx='14' fill='%2322d3ee'/%3E%3Crect x='240' y='128' width='28' height='256' rx='14' fill='%23f43f5e'/%3E%3Crect x='288' y='192' width='28' height='192' rx='14' fill='%2322d3ee'/%3E%3Crect x='336' y='248' width='28' height='136' rx='14' fill='%2306b6d4'/%3E%3Cpath d='M348 124c38 0 68 30 68 68 0 46-36 68-48 98-8 20-16 34-36 34-16 0-26-12-26-26' fill='none' stroke='%2338bdf8' stroke-width='20' stroke-linecap='round'/%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='42' fill='%23090d16'/%3E%3Crect x='36' y='105' width='12' height='42' rx='6' fill='%2306b6d4'/%3E%3Crect x='56' y='84' width='12' height='63' rx='6' fill='%2306b6d4'/%3E%3Crect x='76' y='66' width='12' height='81' rx='6' fill='%2322d3ee'/%3E%3Crect x='96' y='46' width='12' height='101' rx='6' fill='%23f43f5e'/%3E%3Crect x='116' y='72' width='12' height='75' rx='6' fill='%2322d3ee'/%3E%3Crect x='136' y='94' width='12' height='53' rx='6' fill='%2306b6d4'/%3E%3Cpath d='M130 44c15 0 26 12 26 26 0 18-14 26-18 37-3 8-6 13-14 13' fill='none' stroke='%2338bdf8' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23090d16'/%3E%3Crect x='96' y='280' width='28' height='104' rx='14' fill='%2306b6d4'/%3E%3Crect x='144' y='224' width='28' height='160' rx='14' fill='%2306b6d4'/%3E%3Crect x='192' y='176' width='28' height='208' rx='14' fill='%2322d3ee'/%3E%3Crect x='240' y='128' width='28' height='256' rx='14' fill='%23f43f5e'/%3E%3Crect x='288' y='192' width='28' height='192' rx='14' fill='%2322d3ee'/%3E%3Crect x='336' y='248' width='28' height='136' rx='14' fill='%2306b6d4'/%3E%3Cpath d='M348 124c38 0 68 30 68 68 0 46-36 68-48 98-8 20-16 34-36 34-16 0-26-12-26-26' fill='none' stroke='%2338bdf8' stroke-width='20' stroke-linecap='round'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

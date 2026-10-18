@@ -1,0 +1,446 @@
+:root {
+  --bg-clinical: #090d16;
+  --panel-clinical: #111827;
+  --border-clinical: #1f2937;
+  --accent-cyan: #06b6d4;
+  --accent-teal: #14b8a6;
+  --accent-rose: #f43f5e;
+  --accent-amber: #f59e0b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--bg-clinical);
+  color: #f1f5f9;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+}
+
+/* Smooth transitions for interactive elements */
+button,
+.tab-btn,
+.lang-btn,
+.symptom-chip,
+.env-chip,
+.metric-card {
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom Range Slider (Calibration Offset) */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: #1e293b;
+  border-radius: 999px;
+  outline: none;
+  border: 1px solid #334155;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #06b6d4;
+  border: 2px solid #ecfeff;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: #22d3ee;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #06b6d4;
+  border: 2px solid #ecfeff;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  background: #1e293b;
+  border-radius: 999px;
+}
+
+/* Navigation Tab States */
+.tab-btn {
+  position: relative;
+  color: #94a3b8;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover {
+  color: #e2e8f0;
+  background-color: rgba(30, 41, 59, 0.5);
+}
+
+.tab-btn.active {
+  color: #22d3ee;
+  border-bottom-color: #06b6d4;
+  background-color: rgba(6, 182, 212, 0.08);
+  font-weight: 600;
+}
+
+/* Language Switcher Button States */
+.lang-btn {
+  color: #94a3b8;
+  background-color: #0f172a;
+  border: 1px solid #1e293b;
+}
+
+.lang-btn:hover {
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+.lang-btn.active {
+  color: #090d16;
+  background-color: #22d3ee;
+  border-color: #06b6d4;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.35);
+}
+
+/* Canvas Container */
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: 340px;
+  background: radial-gradient(circle at 50% 20%, #0f172a 0%, #070a12 100%);
+  border: 1px solid #1e293b;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .canvas-container {
+    height: 270px;
+  }
+}
+
+#spectrum-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Acoustic Stress Gauge */
+.stress-gauge-track {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  background: #0f172a;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid #1e293b;
+}
+
+.stress-gauge-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #10b981 0%, #06b6d4 40%, #f59e0b 70%, #f43f5e 100%);
+  transition: width 0.15s ease-out, background-color 0.2s ease;
+}
+
+/* Capture Button Pulse */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.65);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(244, 63, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+  }
+}
+
+.recording-pulse {
+  animation: pulse-ring 1.25s infinite;
+}
+
+/* Mini Spectrum Bars (Log History Cards) */
+.mini-spectrum {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+  align-items: end;
+  height: 64px;
+  padding: 8px 8px 4px 8px;
+  background-color: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: 0.5rem;
+}
+
+.mini-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+}
+
+.mini-bar {
+  width: 100%;
+  min-height: 4px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, #22d3ee 0%, #0891b2 100%);
+  transition: height 0.25s ease;
+}
+
+.mini-bar.dominant {
+  background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.55);
+}
+
+.mini-bar-label {
+  font-size: 9px;
+  line-height: 1;
+  color: #64748b;
+  margin-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.mini-bar-col.dominant-col .mini-bar-label {
+  color: #fb7185;
+  font-weight: 700;
+}
+
+/* 10-Channel Problem Frequency Heatmap Scale (.heat-0 ... .heat-5) */
+.heat-cell {
+  border-radius: 0.5rem;
+  border: 1px solid #1e293b;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.heat-0 {
+  background-color: #0f172a;
+  color: #64748b;
+  border-color: #1e293b;
+}
+
+.heat-1 {
+  background-color: #083344;
+  color: #a5f3fc;
+  border-color: #0e7490;
+}
+
+.heat-2 {
+  background-color: #134e4a;
+  color: #99f6e4;
+  border-color: #0d9488;
+}
+
+.heat-3 {
+  background-color: #78350f;
+  color: #fde68a;
+  border-color: #d97706;
+}
+
+.heat-4 {
+  background-color: #7c2d12;
+  color: #fed7aa;
+  border-color: #ea580c;
+}
+
+.heat-5 {
+  background-color: #881337;
+  color: #ffe4e6;
+  border-color: #f43f5e;
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.35);
+}
+
+/* Modal Backdrop & Dialog */
+.modal-backdrop {
+  background-color: rgba(9, 13, 22, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Interactive Symptom & Environment Selector Chips */
+.select-chip {
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid #334155;
+  background-color: #0f172a;
+  color: #cbd5e1;
+}
+
+.select-chip:hover {
+  border-color: #475569;
+  background-color: #1e293b;
+}
+
+.select-chip.selected-symptom {
+  background-color: rgba(244, 63, 94, 0.18);
+  border-color: #f43f5e;
+  color: #ffe4e6;
+  font-weight: 600;
+}
+
+.select-chip.selected-env {
+  background-color: rgba(6, 182, 212, 0.18);
+  border-color: #06b6d4;
+  color: #ecfeff;
+  font-weight: 600;
+}
+
+/* Print-only helper hidden on screen */
+.print-only {
+  display: none;
+}
+
+/* ==========================================================================
+   PRINT STYLESHEET (A4 Audiologist Clinical Fitting Report)
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 14mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10.5pt !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Hide navigation, analyzer, history, modals, and interactive buttons */
+  .no-print,
+  header,
+  nav,
+  #view-analyzer,
+  #view-history,
+  #capture-modal,
+  #symptom-modal,
+  button {
+    display: none !important;
+  }
+
+  /* Force Clinical Report view to display even if user prints from another tab */
+  #view-report {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Convert dark clinical cards and nested dark surfaces to crisp light-mode boxes */
+  .print-card {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin-bottom: 8mm !important;
+    padding: 4.5mm !important;
+    border-radius: 4px !important;
+  }
+
+  #view-report .bg-slate-950,
+  #view-report .bg-slate-950\/80,
+  #view-report .bg-slate-900,
+  #view-report .bg-slate-900\/90 {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  #view-report .border-slate-800,
+  #view-report .border-slate-700 {
+    border-color: #cbd5e1 !important;
+  }
+
+  .print-text-dark {
+    color: #0f172a !important;
+  }
+
+  .print-text-muted {
+    color: #475569 !important;
+  }
+
+  #view-report .text-emerald-400 {
+    color: #047857 !important;
+  }
+
+  #view-report .text-rose-400,
+  #view-report .text-rose-300 {
+    color: #be123c !important;
+  }
+
+  /* Ensure Heatmap cells remain high-contrast and legible on A4 paper */
+  .heat-0 {
+    background-color: #f8fafc !important;
+    color: #64748b !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .heat-1 {
+    background-color: #e0f2fe !important;
+    color: #0369a1 !important;
+    border: 1px solid #7dd3fc !important;
+  }
+
+  .heat-2 {
+    background-color: #ccfbf1 !important;
+    color: #0f766e !important;
+    border: 1px solid #5eead4 !important;
+  }
+
+  .heat-3 {
+    background-color: #fef3c7 !important;
+    color: #b45309 !important;
+    border: 1px solid #fcd34d !important;
+  }
+
+  .heat-4 {
+    background-color: #ffedd5 !important;
+    color: #c2410c !important;
+    border: 1px solid #fdba74 !important;
+  }
+
+  .heat-5 {
+    background-color: #ffe4e6 !important;
+    color: #be123c !important;
+    border: 2px solid #f43f5e !important;
+    box-shadow: none !important;
+    font-weight: 700 !important;
+  }
+
+  .mini-spectrum {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+  }
+}

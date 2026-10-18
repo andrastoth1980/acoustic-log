@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#090d16" />
+  <meta name="description" content="AcousticLog — Audiological Spectrum Detective &amp; Fitting Assistant" />
+  <title>AcousticLog — Audiological Spectrum Detective &amp; Fitting Assistant</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="./i18n.js" defer></script>
+  <script src="./dsp-engine.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body class="min-h-screen flex flex-col bg-[#090d16] text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
+
+  <!-- TOP CLINICAL HEADER -->
+  <header class="no-print sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 pt-3 pb-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <!-- Brand / Logo -->
+      <div class="flex items-start sm:items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal-500/20 border border-cyan-500/40 flex items-center justify-center shrink-0 shadow-inner">
+          <svg class="w-6 h-6 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h2l2-5 3 10 3-14 3 12 2-3h3" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white" data-i18n="app.title">AcousticLog</h1>
+            <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30" data-i18n="app.badge">Clinical Fitting Companion</span>
+            <span class="hidden sm:inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span data-i18n="app.offline_ready">Offline Ready (PWA)</span>
+            </span>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-400" data-i18n="app.subtitle">Audiological Spectrum Detective &amp; Fitting Assistant</p>
+        </div>
+      </div>
+
+      <!-- 5-Language Switcher -->
+      <div class="flex items-center gap-1.5 self-start md:self-center" role="group" data-i18n-aria="ui.lang_select" aria-label="Select interface language">
+        <span class="text-xs text-slate-400 mr-1 hidden sm:inline" data-i18n="ui.lang">Language</span>
+        <button type="button" data-lang="en" class="lang-btn active px-2.5 py-1 rounded-md text-xs font-medium" aria-pressed="true">🇬🇧 EN</button>
+        <button type="button" data-lang="de" class="lang-btn px-2.5 py-1 rounded-md text-xs font-medium" aria-pressed="false">🇩🇪 DE</button>
+        <button type="button" data-lang="fr" class="lang-btn px-2.5 py-1 rounded-md text-xs font-medium" aria-pressed="false">🇫🇷 FR</button>
+        <button type="button" data-lang="hu" class="lang-btn px-2.5 py-1 rounded-md text-xs font-medium" aria-pressed="false">🇭🇺 HU</button>
+        <button type="button" data-lang="pl" class="lang-btn px-2.5 py-1 rounded-md text-xs font-medium" aria-pressed="false">🇵🇱 PL</button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Primary Navigation">
+      <button type="button" role="tab" aria-selected="true" aria-controls="view-analyzer" data-tab="analyzer" class="tab-btn active px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap flex items-center gap-2">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 19h16M7 16V8m5 8V5m5 11v-6" />
+        </svg>
+        <span data-i18n="ui.tab.analyzer">Live Analyzer</span>
+      </button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="view-history" data-tab="history" class="tab-btn px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap flex items-center gap-2">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span data-i18n="ui.tab.history">Log History</span>
+      </button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="view-report" data-tab="report" class="tab-btn px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap flex items-center gap-2">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span data-i18n="ui.tab.report">Clinical Report</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 space-y-6">
+
+    <!-- ==================================================================
+         TAB 1: LIVE ANALYZER (#view-analyzer)
+         ================================================================== -->
+    <section id="view-analyzer" role="tabpanel" class="no-print space-y-5">
+
+      <!-- Top Analyzer Control Bar -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <h2 class="text-base sm:text-lg font-bold text-white" data-i18n="analyzer.title">Real-Time 10-Band Audiological Spectrum</h2>
+            <div class="flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-950 border border-slate-800">
+              <span id="status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+              <span id="status-text" aria-live="polite" class="text-xs font-medium text-slate-300" data-i18n="analyzer.status.idle">Idle — Select Microphone or Demo Synthesizer</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400" data-i18n="analyzer.subtitle">4096-pt FFT • 88–11,000 Hz • Unprocessed Microphone Stream</p>
+        </div>
+
+        <!-- Primary Audio & Display Controls -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" id="btn-mic" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center gap-2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 01-14 0v-2M12 19v4m-4 0h8" />
+            </svg>
+            <span data-i18n="analyzer.start_mic">Start Microphone</span>
+          </button>
+
+          <button type="button" id="btn-view-toggle" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700" data-i18n="analyzer.view.waterfall" data-i18n-title="analyzer.view.label" title="Display Mode">
+            Waterfall Spectrogram
+          </button>
+
+          <button type="button" id="btn-banana-toggle" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 border border-teal-500/40" data-i18n="analyzer.banana.toggle" data-i18n-title="analyzer.banana.label" title="Speech Banana (Conversational Speech Envelope)">
+            Speech Banana
+          </button>
+
+          <button type="button" id="btn-peak-reset" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700" data-i18n="analyzer.peaks.reset">
+            Reset Peaks
+          </button>
+        </div>
+      </div>
+
+      <!-- Spectrum Canvas + Legend + Calibration Card -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3">
+        <!-- Legend Row -->
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+          <span class="font-medium text-slate-300" data-i18n="analyzer.axis.freq">Frequency (Hz) — 10 Audiological Fitting Channels</span>
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-sm bg-cyan-400"></span>
+              <span data-i18n="analyzer.legend.current">Real-time Band Energy</span>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-2.5 h-0.5 bg-amber-400"></span>
+              <span data-i18n="analyzer.legend.peak">Peak Hold</span>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-sm bg-rose-500"></span>
+              <span data-i18n="analyzer.legend.problem">Dominant / Overload Band</span>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-sm bg-teal-400/30 border border-teal-400/60"></span>
+              <span data-i18n="analyzer.legend.banana">Speech Banana Region</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Responsive High-DPI Canvas Container -->
+        <div class="canvas-container">
+          <canvas id="spectrum-canvas" aria-label="10-Band Audiological Spectrum Canvas"></canvas>
+        </div>
+
+        <!-- Calibration Slider Bar -->
+        <div class="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <label for="cal-slider" class="text-xs font-semibold text-slate-300" data-i18n="analyzer.cal.label">Mic Calibration Offset</label>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-cyan-300">
+              <span id="cal-value">0</span> <span data-i18n="analyzer.cal.unit">dB</span>
+            </span>
+          </div>
+          <div class="flex-1 max-w-md flex items-center gap-3">
+            <span class="text-[11px] font-mono text-slate-500">-20</span>
+            <input id="cal-slider" type="range" min="-20" max="40" step="1" value="0" data-i18n-title="analyzer.cal.help" title="Adjusts estimated dB SPL to match a reference sound level meter (default 0 dB offset = 94 dB SPL @ 1.0 RMS)." />
+            <span class="text-[11px] font-mono text-slate-500">+40</span>
+          </div>
+          <p class="text-[11px] text-slate-400 sm:max-w-xs" data-i18n="analyzer.cal.help">Adjusts estimated dB SPL to match a reference sound level meter (default 0 dB offset = 94 dB SPL @ 1.0 RMS).</p>
+        </div>
+      </div>
+
+      <!-- Real-Time Audiological Metric Cards (6 Cards incl. Feedback Detector) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
+        <!-- 1. Est. Sound Level (dB SPL) -->
+        <div class="metric-card bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300" data-i18n="metric.spl">Est. Sound Level</span>
+            <span class="text-[11px] font-mono text-cyan-400" data-i18n="metric.spl.short">dB SPL</span>
+          </div>
+          <div class="my-2 flex items-baseline gap-1.5">
+            <span id="m-spl" class="text-2xl sm:text-3xl font-bold font-mono text-white">0.0</span>
+            <span class="text-xs text-slate-400" data-i18n="metric.spl.unit">dB SPL</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-snug" data-i18n="metric.spl.hint">Calibrated RMS acoustic pressure (comfortable &lt;75 dB, loud &gt;80 dB)</p>
+        </div>
+
+        <!-- 2. Crest Factor (dB) -->
+        <div class="metric-card bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300" data-i18n="metric.crest">Crest Factor</span>
+            <span class="text-[11px] font-mono text-amber-400" data-i18n="metric.crest.short">Peak-to-RMS</span>
+          </div>
+          <div class="my-2 flex items-baseline gap-1.5">
+            <span id="m-crest" class="text-2xl sm:text-3xl font-bold font-mono text-white">0.0</span>
+            <span class="text-xs text-slate-400" data-i18n="metric.crest.unit">dB</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-snug" data-i18n="metric.crest.hint">250 ms rolling Peak minus RMS (&gt;14 dB indicates sharp impulses)</p>
+        </div>
+
+        <!-- 3. Spectral Centroid (Hz) -->
+        <div class="metric-card bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300" data-i18n="metric.centroid">Spectral Centroid</span>
+            <span class="text-[11px] font-mono text-teal-400" data-i18n="metric.centroid.short">Center of Mass</span>
+          </div>
+          <div class="my-2 flex items-baseline gap-1.5">
+            <span id="m-centroid" class="text-2xl sm:text-3xl font-bold font-mono text-white">0</span>
+            <span class="text-xs text-slate-400" data-i18n="metric.centroid.unit">Hz</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-snug" data-i18n="metric.centroid.hint">Acoustic brightness center (&gt;2500 Hz perceived as sharp/metallic)</p>
+        </div>
+
+        <!-- 4. Masking Ratio (USMR dB) -->
+        <div class="metric-card bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300" data-i18n="metric.usmr">Masking Ratio (USMR)</span>
+            <span class="text-[11px] font-mono text-rose-400" data-i18n="metric.usmr.short">Low vs. Speech</span>
+          </div>
+          <div class="my-2 flex items-baseline gap-1.5">
+            <span id="m-usmr" class="text-2xl sm:text-3xl font-bold font-mono text-white">0.0</span>
+            <span class="text-xs text-slate-400" data-i18n="metric.usmr.unit">dB</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-snug" data-i18n="metric.usmr.hint">125–500 Hz vs. 1–4 kHz energy (&gt;+6 dB causes upward masking)</p>
+        </div>
+
+        <!-- 5. Acoustic Stress Gauge (0–100%) -->
+        <div class="metric-card bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300" data-i18n="metric.stress">Acoustic Stress Gauge</span>
+            <span class="text-[11px] font-mono text-cyan-300" data-i18n="metric.stress.short">Listening Effort</span>
+          </div>
+          <div class="my-2 space-y-1.5">
+            <div class="flex items-baseline justify-between">
+              <div class="flex items-baseline gap-1">
+                <span id="m-stress" class="text-2xl sm:text-3xl font-bold font-mono text-white">0</span>
+                <span class="text-xs text-slate-400" data-i18n="metric.stress.unit">%</span>
+              </div>
+              <span id="m-stress-level" class="text-[11px] font-semibold text-emerald-400" data-i18n="metric.level.low">Low / Comfortable</span>
+            </div>
+            <div class="stress-gauge-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="m-stress-bar" class="stress-gauge-fill"></div>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-snug" data-i18n="metric.stress.hint">Composite listening load from SPL, impulses, brightness &amp; masking</p>
+        </div>
+
+        <!-- 6. Acoustic Feedback (Whistle) Detector -->
+        <div class="metric-card bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300" data-i18n="metric.feedback">Feedback Whistle</span>
+            <span class="text-[11px] font-mono text-fuchsia-400">1.5–6 kHz</span>
+          </div>
+          <div class="my-2 flex items-baseline gap-1.5">
+            <span id="m-feedback" class="text-base sm:text-lg font-bold font-mono text-emerald-400" data-i18n="metric.feedback.none">None detected</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-snug" data-i18n="metric.feedback.hint">Sustained narrowband tonal peak (&gt;20 dB prominence, &ge;300 ms)</p>
+        </div>
+      </div>
+
+      <!-- Demo Synthesizer & Start/Stop Capture Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- Demo Noise Synthesizer Card -->
+        <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-3">
+          <div>
+            <h3 class="text-sm font-bold text-white" data-i18n="synth.title">Built-in Acoustic Scene Synthesizer (No Mic Required)</h3>
+            <p class="text-xs text-slate-400 mt-0.5" data-i18n="synth.help">Test the analyzer and capture workflow anytime using procedurally generated Web Audio clinical noise scenes.</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+            <button type="button" id="btn-synth-restaurant" class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-amber-500/50 text-left flex flex-col justify-between gap-1">
+              <span class="text-xs font-bold text-amber-300" data-i18n="synth.restaurant">Sim: Restaurant Clatter</span>
+              <span class="text-[11px] text-slate-400 leading-tight" data-i18n="synth.restaurant.desc">Babble noise + random 3–4 kHz dish/cutlery transient spikes</span>
+            </button>
+
+            <button type="button" id="btn-synth-traffic" class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-cyan-500/50 text-left flex flex-col justify-between gap-1">
+              <span class="text-xs font-bold text-cyan-300" data-i18n="synth.traffic">Sim: Traffic Rumble</span>
+              <span class="text-[11px] text-slate-400 leading-tight" data-i18n="synth.traffic.desc">Heavy 125–500 Hz low-frequency rumble (upward masking)</span>
+            </button>
+
+            <button type="button" id="btn-synth-feedback" class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-fuchsia-500/50 text-left flex flex-col items-center sm:items-start justify-between gap-1">
+              <span class="text-xs font-bold text-fuchsia-300" data-i18n="synth.feedback">Sim: Feedback Whistle</span>
+              <span class="text-[11px] text-slate-400 leading-tight" data-i18n="synth.feedback.desc">Quiet room tone + intermittent ~3.15 kHz narrowband acoustic feedback whistle</span>
+            </button>
+
+            <button type="button" id="btn-synth-stop" class="p-3 rounded-lg bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/40 text-center flex flex-col items-center justify-center gap-1">
+              <svg class="w-4 h-4 text-rose-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+              <span class="text-xs font-semibold text-slate-300" data-i18n="synth.stop">Stop Synth</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Prominent Start/Stop Capture Action Card -->
+        <div class="lg:col-span-5 bg-gradient-to-br from-rose-950/40 via-slate-900 to-slate-900 border border-rose-500/30 rounded-xl p-4 flex flex-col justify-between space-y-3">
+          <div class="space-y-2">
+            <button type="button" id="btn-capture" class="w-full py-3.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-bold text-sm sm:text-base shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2.5">
+              <span class="w-3 h-3 rounded-full bg-white animate-pulse"></span>
+              <span id="btn-capture-label" data-i18n="capture.button">Start Capture</span>
+            </button>
+            <p class="text-xs text-slate-300 text-center" data-i18n="capture.subtext">Continuously samples spectral frames until stopped — no voice or raw audio recorded</p>
+          </div>
+
+          <!-- Capture Progress Bar & Status -->
+          <div id="capture-progress" aria-live="polite" class="space-y-1.5">
+            <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+              <div id="capture-progress-bar" class="h-full w-0 bg-gradient-to-r from-rose-500 to-amber-400 transition-all duration-100"></div>
+            </div>
+            <div id="capture-progress-text" class="text-xs font-mono text-center text-rose-300 min-h-[1rem]"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================================
+         TAB 2: LOG HISTORY (#view-history)
+         ================================================================== -->
+    <section id="view-history" role="tabpanel" class="no-print hidden space-y-5">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-white" data-i18n="history.title">Recorded Acoustic Events &amp; Symptom Log</h2>
+            <p class="text-xs text-slate-400" data-i18n="history.subtitle">Saved spectral fingerprints stored locally on your device</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" id="btn-load-sample" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/40" data-i18n="history.load_sample">
+              Load Sample Clinical Data
+            </button>
+            <button type="button" id="btn-export-json" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700" data-i18n="history.export">
+              Export JSON backup
+            </button>
+            <button type="button" id="btn-import-json" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700" data-i18n="history.import">
+              Import JSON backup
+            </button>
+            <input type="file" id="import-file" accept=".json,application/json" class="hidden" />
+            <button type="button" id="btn-clear-all" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40" data-i18n="history.clear_all">
+              Clear All Logs
+            </button>
+          </div>
+        </div>
+        <p id="backup-hint" class="text-[11px] text-slate-400 pt-2 border-t border-slate-800/80" data-i18n="history.backup.hint">Data stays only on this device. Use Export to back up or move your log to another phone/computer; for a PDF report, use the Print button → "Save as PDF".</p>
+      </div>
+
+      <!-- Empty State -->
+      <div id="history-empty" class="hidden bg-slate-900/70 border border-slate-800 rounded-xl p-8 text-center space-y-3">
+        <div class="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700 mx-auto flex items-center justify-center text-cyan-400">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <h3 class="text-base font-bold text-white" data-i18n="history.empty.title">No Acoustic Logs Recorded Yet</h3>
+        <p class="text-xs sm:text-sm text-slate-400 max-w-md mx-auto" data-i18n="history.empty.desc">Capture a sample in the Live Analyzer tab, or load realistic clinical sample data to explore the audiologist report.</p>
+      </div>
+
+      <!-- Log Entries List Container -->
+      <div id="history-list" class="space-y-4"></div>
+    </section>
+
+    <!-- ==================================================================
+         TAB 3: AUDIOLOGIST CLINICAL REPORT (#view-report)
+         ================================================================== -->
+    <section id="view-report" role="tabpanel" class="hidden space-y-6">
+      <!-- Report Header Card -->
+      <div class="print-card bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-slate-800 pb-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-cyan-400 print-text-muted" data-i18n="app.title">AcousticLog</span>
+              <span class="text-xs text-slate-500">•</span>
+              <span class="text-xs text-slate-400 print-text-muted" data-i18n="app.badge">Clinical Fitting Companion</span>
+            </div>
+            <h2 class="text-lg sm:text-xl font-bold text-white print-text-dark" data-i18n="report.title">Audiologist Clinical Fitting Report</h2>
+            <p class="text-xs sm:text-sm text-slate-400 print-text-muted" data-i18n="report.subtitle">Objective Spectral Environment Log &amp; Deterministic Hearing Aid Fitting Recommendations</p>
+          </div>
+
+          <button type="button" id="btn-print" class="no-print self-start px-4 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-cyan-500/20 flex items-center gap-2 shrink-0">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
+            </svg>
+            <span data-i18n="report.print_btn">Print / Export PDF</span>
+          </button>
+        </div>
+
+        <p class="text-xs text-slate-300 print-text-muted leading-relaxed" data-i18n="report.intro">
+          This report summarizes real-world acoustic environments where the patient experienced listening difficulties. All measurements were captured using a 4096-point FFT across 10 standard audiological fitting channels (125–8000 Hz).
+        </p>
+
+        <!-- Summary Metadata Pills -->
+        <div class="flex flex-wrap items-center gap-3 pt-1 text-xs">
+          <span id="report-date" class="px-3 py-1 rounded-md bg-slate-950 border border-slate-800 text-slate-300 print-text-dark font-mono"></span>
+          <span id="report-count" class="px-3 py-1 rounded-md bg-slate-950 border border-slate-800 text-cyan-300 print-text-dark font-semibold"></span>
+          <span id="report-avg-spl" class="px-3 py-1 rounded-md bg-slate-950 border border-slate-800 text-slate-300 print-text-dark font-mono"></span>
+          <span id="report-avg-stress" class="px-3 py-1 rounded-md bg-slate-950 border border-slate-800 text-slate-300 print-text-dark font-mono"></span>
+          <span id="report-device" class="px-3 py-1 rounded-md bg-slate-950 border border-slate-800 text-teal-300 print-text-dark font-medium"></span>
+        </div>
+
+        <!-- Device Profile Form (No-Print) -->
+        <div class="no-print pt-3 border-t border-slate-800/80 flex flex-col md:flex-row md:items-end gap-3">
+          <div class="space-y-1">
+            <span class="block text-xs font-bold text-slate-200" data-i18n="device.heading">My hearing aids</span>
+            <label for="device-brand" class="block text-[11px] text-slate-400" data-i18n="device.brand">Brand</label>
+            <select id="device-brand" class="rounded-lg bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none px-3 py-1.5 text-xs text-slate-100">
+              <option value="unknown" data-i18n="brand.unknown">Not specified</option>
+              <option value="phonak">Phonak</option>
+              <option value="oticon">Oticon</option>
+              <option value="signia">Signia</option>
+              <option value="widex">Widex</option>
+              <option value="resound">ReSound</option>
+              <option value="starkey">Starkey</option>
+              <option value="unitron">Unitron</option>
+              <option value="bernafon">Bernafon</option>
+              <option value="rexton">Rexton</option>
+              <option value="hansaton">Hansaton</option>
+              <option value="other" data-i18n="brand.other">Other</option>
+            </select>
+          </div>
+          <div class="flex-1 space-y-1">
+            <label for="device-model" class="block text-[11px] text-slate-400" data-i18n="device.model">Model / Dome / Style</label>
+            <input type="text" id="device-model" maxlength="120" class="w-full rounded-lg bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500" data-i18n-placeholder="device.model_placeholder" placeholder="e.g., Lumity L90-R, vented dome" />
+          </div>
+          <button type="button" id="btn-device-save" class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 text-xs font-semibold shrink-0" data-i18n="device.save">Save device</button>
+        </div>
+      </div>
+
+      <!-- 10-Channel Problem-Frequency Heatmap -->
+      <div class="print-card bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div>
+          <h3 class="text-sm sm:text-base font-bold text-white print-text-dark" data-i18n="report.heatmap.title">10-Channel Problem-Frequency Heatmap (Aggregated Overload &amp; Symptom Correlation)</h3>
+          <p class="text-xs text-slate-400 print-text-muted mt-0.5" data-i18n="report.heatmap.desc">Indicates how frequently each audiological channel exhibited peak energy dominance or correlated with patient discomfort across all logged events.</p>
+        </div>
+
+        <div id="report-heatmap" class="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2.5"></div>
+
+        <div class="flex items-center justify-between text-[11px] text-slate-400 print-text-muted pt-1">
+          <span data-i18n="report.heatmap.low">Low Incidence (0%)</span>
+          <span data-i18n="report.heatmap.high">High Incidence / Primary Culprit (100%)</span>
+        </div>
+      </div>
+
+      <!-- Deterministic Fitting Parameter Recommendations -->
+      <div class="print-card bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div>
+          <h3 class="text-sm sm:text-base font-bold text-white print-text-dark" data-i18n="report.recommendations.heading">Deterministic Fine-Tuning Parameter Recommendations</h3>
+          <p class="text-xs text-slate-400 print-text-muted mt-0.5" data-i18n="report.recommendations.desc">Actionable programming adjustments derived from spectral metrics and patient symptom logs:</p>
+        </div>
+        <div id="report-rules" class="space-y-3"></div>
+      </div>
+
+      <!-- Symptom & Environment Breakdown Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="print-card bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-3">
+          <h3 class="text-sm sm:text-base font-bold text-white print-text-dark" data-i18n="report.symptoms.heading">Symptom Frequency Distribution</h3>
+          <div id="report-symptoms" class="space-y-2.5"></div>
+        </div>
+
+        <div class="print-card bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-3">
+          <h3 class="text-sm sm:text-base font-bold text-white print-text-dark" data-i18n="report.env.heading">Acoustic Environment Breakdown</h3>
+          <div id="report-envs" class="space-y-2.5"></div>
+        </div>
+      </div>
+
+      <!-- Program & Volume Context Breakdown -->
+      <div class="print-card bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-3">
+        <h3 class="text-sm sm:text-base font-bold text-white print-text-dark" data-i18n="report.context.heading">Program &amp; Volume Context</h3>
+        <div id="report-context" class="space-y-2.5"></div>
+      </div>
+
+      <!-- Before / After Fitting Comparison -->
+      <div class="print-card bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 class="text-sm sm:text-base font-bold text-white print-text-dark" data-i18n="compare.heading">Before vs. After Fitting Comparison</h3>
+            <p class="text-xs text-slate-400 print-text-muted mt-0.5" data-i18n="fitting.heading">Fitting Visits &amp; Before/After Comparison</p>
+          </div>
+          <div class="no-print flex items-center gap-2">
+            <label for="compare-select" class="text-xs text-slate-400 whitespace-nowrap" data-i18n="compare.select">Compare around fitting visit:</label>
+            <select id="compare-select" class="rounded-lg bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none px-2.5 py-1.5 text-xs text-slate-100"></select>
+          </div>
+        </div>
+
+        <!-- Add Fitting Visit Form & List (No-Print) -->
+        <div class="no-print bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-end gap-2.5">
+            <div class="space-y-1">
+              <label for="fitting-date" class="block text-[11px] text-slate-400" data-i18n="fitting.date">Visit date</label>
+              <input type="date" id="fitting-date" class="rounded-lg bg-slate-900 border border-slate-700 focus:border-cyan-400 focus:outline-none px-3 py-1.5 text-xs text-slate-100" />
+            </div>
+            <div class="flex-1 space-y-1">
+              <label for="fitting-note" class="block text-[11px] text-slate-400" data-i18n="fitting.note">Audiologist adjustments / note</label>
+              <input type="text" id="fitting-note" maxlength="300" class="w-full rounded-lg bg-slate-900 border border-slate-700 focus:border-cyan-400 focus:outline-none px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500" data-i18n-placeholder="fitting.note_placeholder" placeholder="e.g., Reduced 3–4 kHz MPO by 4 dB, enabled Impulse NR" />
+            </div>
+            <button type="button" id="btn-fitting-add" class="px-4 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 text-xs font-semibold shrink-0" data-i18n="fitting.add">Add fitting visit</button>
+          </div>
+          <div id="fitting-list" class="space-y-1.5 text-xs"></div>
+        </div>
+
+        <!-- Comparison Output Container (Prints) -->
+        <div id="report-compare" class="space-y-3"></div>
+      </div>
+
+      <!-- Clinical Report Disclaimer -->
+      <div class="print-card bg-slate-950/80 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 print-text-muted leading-relaxed" data-i18n="report.footer_disclaimer">
+          Clinical Disclaimer: AcousticLog provides uncalibrated consumer-microphone spectral estimates to assist hearing aid fine-tuning. Always verify MPO and gain adjustments with Real-Ear Measurement (REM) and clinical audiometry.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ====================================================================
+       CAPTURE & SYMPTOM LOGGING MODAL (#capture-modal)
+       ==================================================================== -->
+  <div id="capture-modal" class="no-print hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="modal-title-heading" tabindex="-1">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-5 my-8 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-800 pb-3">
+        <div>
+          <h2 id="modal-title-heading" class="text-lg font-bold text-white" data-i18n="modal.title">Log Acoustic Event &amp; Symptoms</h2>
+          <p class="text-xs text-slate-400 mt-0.5" data-i18n="modal.subtitle">Spectral fingerprint captured. Select what bothered your hearing aids:</p>
+        </div>
+      </div>
+
+      <!-- Measured Acoustic Summary -->
+      <div class="space-y-2">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-400" data-i18n="modal.measured_summary">Measured Acoustic Summary (Average &amp; Peaks)</h3>
+        <div id="modal-summary" class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs"></div>
+      </div>
+
+      <!-- 1. Symptoms Checkboxes (6 Fixed IDs) -->
+      <fieldset class="space-y-2.5">
+        <legend class="text-xs sm:text-sm font-bold text-white" data-i18n="modal.symptoms.heading">1. What symptoms did you experience? (Select all that apply)</legend>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <label class="select-chip symptom-chip rounded-xl p-3 flex items-start gap-3">
+            <input type="checkbox" name="symptom" value="sharp" class="mt-1 accent-rose-500 w-4 h-4 shrink-0" />
+            <span class="space-y-0.5">
+              <span class="block text-xs font-bold text-white" data-i18n="symptom.sharp">Too Sharp / Tinny / Piercing</span>
+              <span class="block text-[11px] text-slate-400 leading-tight" data-i18n="symptom.sharp.desc">High frequencies sound harsh, metallic, or painfully bright (2–6 kHz overload)</span>
+            </span>
+          </label>
+
+          <label class="select-chip symptom-chip rounded-xl p-3 flex items-start gap-3">
+            <input type="checkbox" name="symptom" value="masking" class="mt-1 accent-rose-500 w-4 h-4 shrink-0" />
+            <span class="space-y-0.5">
+              <span class="block text-xs font-bold text-white" data-i18n="symptom.masking">Speech Muffled by Background Noise</span>
+              <span class="block text-[11px] text-slate-400 leading-tight" data-i18n="symptom.masking.desc">Can hear noise loudly, but cannot understand conversation (upward spread of masking)</span>
+            </span>
+          </label>
+
+          <label class="select-chip symptom-chip rounded-xl p-3 flex items-start gap-3">
+            <input type="checkbox" name="symptom" value="impulses" class="mt-1 accent-rose-500 w-4 h-4 shrink-0" />
+            <span class="space-y-0.5">
+              <span class="block text-xs font-bold text-white" data-i18n="symptom.impulses">Sudden Loud Bangs / Clatter Hurt</span>
+              <span class="block text-[11px] text-slate-400 leading-tight" data-i18n="symptom.impulses.desc">Dishes, doors, keys, or clapping spike uncomfortably before hearing aid reacts</span>
+            </span>
+          </label>
+
+          <label class="select-chip symptom-chip rounded-xl p-3 flex items-start gap-3">
+            <input type="checkbox" name="symptom" value="reverb" class="mt-1 accent-rose-500 w-4 h-4 shrink-0" />
+            <span class="space-y-0.5">
+              <span class="block text-xs font-bold text-white" data-i18n="symptom.reverb">Echoey / Hollow / Boomy Room</span>
+              <span class="block text-[11px] text-slate-400 leading-tight" data-i18n="symptom.reverb.desc">Sound smears together in large or hard-surfaced rooms; poor spatial clarity</span>
+            </span>
+          </label>
+
+          <label class="select-chip symptom-chip rounded-xl p-3 flex items-start gap-3">
+            <input type="checkbox" name="symptom" value="occlusion" class="mt-1 accent-rose-500 w-4 h-4 shrink-0" />
+            <span class="space-y-0.5">
+              <span class="block text-xs font-bold text-white" data-i18n="symptom.occlusion">Own Voice Sounds Boomy / In a Barrel</span>
+              <span class="block text-[11px] text-slate-400 leading-tight" data-i18n="symptom.occlusion.desc">Own voice echoes inside the head or sounds plugged when speaking (250–500 Hz)</span>
+            </span>
+          </label>
+
+          <label class="select-chip symptom-chip rounded-xl p-3 flex items-start gap-3">
+            <input type="checkbox" name="symptom" value="whistle" class="mt-1 accent-rose-500 w-4 h-4 shrink-0" />
+            <span class="space-y-0.5">
+              <span class="block text-xs font-bold text-white" data-i18n="symptom.whistle">Whistling / Squealing (Feedback)</span>
+              <span class="block text-[11px] text-slate-400 leading-tight" data-i18n="symptom.whistle.desc">High-pitched whistle or squeal from the hearing aid, especially when chewing, hugging, or putting on a hat</span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- 2. Environment Radios (5 Fixed IDs) -->
+      <fieldset class="space-y-2.5">
+        <legend class="text-xs sm:text-sm font-bold text-white" data-i18n="modal.env.heading">2. Where did this happen?</legend>
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <label class="select-chip env-chip rounded-lg p-2.5 flex items-center gap-2 text-xs">
+            <input type="radio" name="env" value="restaurant" checked class="accent-cyan-400" />
+            <span data-i18n="env.restaurant">Restaurant / Café</span>
+          </label>
+          <label class="select-chip env-chip rounded-lg p-2.5 flex items-center gap-2 text-xs">
+            <input type="radio" name="env" value="street" class="accent-cyan-400" />
+            <span data-i18n="env.street">Street / Traffic</span>
+          </label>
+          <label class="select-chip env-chip rounded-lg p-2.5 flex items-center gap-2 text-xs">
+            <input type="radio" name="env" value="office" class="accent-cyan-400" />
+            <span data-i18n="env.office">Office / Meeting</span>
+          </label>
+          <label class="select-chip env-chip rounded-lg p-2.5 flex items-center gap-2 text-xs">
+            <input type="radio" name="env" value="home_tv" class="accent-cyan-400" />
+            <span data-i18n="env.home_tv">Home / TV / Conversation</span>
+          </label>
+          <label class="select-chip env-chip rounded-lg p-2.5 flex items-center gap-2 text-xs col-span-2 sm:col-span-1">
+            <input type="radio" name="env" value="store" class="accent-cyan-400" />
+            <span data-i18n="env.store">Supermarket / Mall</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- Hearing Aid Settings at That Moment -->
+      <fieldset class="space-y-3">
+        <legend class="text-xs sm:text-sm font-bold text-white" data-i18n="context.heading">Hearing aid settings at that moment</legend>
+        <div class="space-y-1.5">
+          <span class="block text-xs text-slate-300 font-medium" data-i18n="context.program">Active program</span>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <label class="select-chip env-chip rounded-lg p-2 flex items-center gap-2 text-xs">
+              <input type="radio" name="program" value="auto" class="accent-cyan-400" />
+              <span data-i18n="program.auto">Automatic / Universal</span>
+            </label>
+            <label class="select-chip env-chip rounded-lg p-2 flex items-center gap-2 text-xs">
+              <input type="radio" name="program" value="quiet" class="accent-cyan-400" />
+              <span data-i18n="program.quiet">Quiet / Speech in Quiet</span>
+            </label>
+            <label class="select-chip env-chip rounded-lg p-2 flex items-center gap-2 text-xs">
+              <input type="radio" name="program" value="noise" class="accent-cyan-400" />
+              <span data-i18n="program.noise">Speech in Noise / Restaurant</span>
+            </label>
+            <label class="select-chip env-chip rounded-lg p-2 flex items-center gap-2 text-xs">
+              <input type="radio" name="program" value="music" class="accent-cyan-400" />
+              <span data-i18n="program.music">Music</span>
+            </label>
+            <label class="select-chip env-chip rounded-lg p-2 flex items-center gap-2 text-xs">
+              <input type="radio" name="program" value="phone" class="accent-cyan-400" />
+              <span data-i18n="program.phone">Phone / Streaming</span>
+            </label>
+            <label class="select-chip env-chip rounded-lg p-2 flex items-center gap-2 text-xs">
+              <input type="radio" name="program" value="other" class="accent-cyan-400" />
+              <span data-i18n="program.other">Other custom program</span>
+            </label>
+            <label class="select-chip env-chip rounded-lg p-2 flex items-center gap-2 text-xs col-span-2">
+              <input type="radio" name="program" value="unknown" checked class="accent-cyan-400" />
+              <span data-i18n="program.unknown">Not sure</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+          <label for="modal-volume" class="text-xs text-slate-300 font-medium" data-i18n="context.volume">Volume setting</label>
+          <select id="modal-volume" class="rounded-lg bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none px-3 py-1.5 text-xs text-slate-100">
+            <option value="unknown" data-i18n="volume.unknown">Not sure</option>
+            <option value="-3">-3</option>
+            <option value="-2">-2</option>
+            <option value="-1">-1</option>
+            <option value="0" data-i18n="volume.default">Default (0)</option>
+            <option value="1">+1</option>
+            <option value="2">+2</option>
+            <option value="3">+3</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <!-- 3. Optional Patient Note -->
+      <div class="space-y-1.5">
+        <label for="modal-note" class="block text-xs sm:text-sm font-bold text-white" data-i18n="modal.note.label">3. Optional Patient Note for Audiologist</label>
+        <textarea id="modal-note" rows="2" class="w-full rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none p-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500" data-i18n-placeholder="modal.note.placeholder" placeholder="e.g., Cutlery clinking behind me was painful, could not hear conversation across the table…"></textarea>
+      </div>
+
+      <!-- Modal Actions -->
+      <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+        <button type="button" id="btn-modal-cancel" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300" data-i18n="modal.cancel">Discard</button>
+        <button type="button" id="btn-modal-save" class="px-5 py-2 rounded-lg text-xs sm:text-sm font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20" data-i18n="modal.save">Save to Clinical Log</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast" aria-live="polite" class="no-print fixed bottom-5 right-5 z-50 hidden max-w-sm bg-slate-900 border border-cyan-500/50 text-slate-100 px-4 py-3 rounded-xl shadow-2xl text-xs sm:text-sm font-medium"></div>
+
+  <!-- FOOTER -->
+  <footer class="no-print mt-auto border-t border-slate-800/80 bg-slate-950/60 py-5 px-4 sm:px-6">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs text-slate-400">
+      <p data-i18n="app.privacy">100% Client-Side &amp; GDPR Compliant: No raw audio is ever recorded, stored, or transmitted. Only numerical spectral fingerprints are saved locally in your browser.</p>
+      <p class="text-slate-500" data-i18n="app.disclaimer">Clinical decision-support tool for hearing aid wearers and audiologists. Estimates are uncalibrated relative to a Type-1 sound level meter.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
