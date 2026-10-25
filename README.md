@@ -24,7 +24,7 @@ Because the audiologist cannot reproduce that exact acoustic scene inside a soun
   - Allows testing and clinical demonstration without an external noise source using Web Audio oscillators, noise buffers, and `BiquadFilterNode` chains:
     - **Restaurant Clatter:** Pink/speech babble bed with stochastic `3000–4000 Hz` high-crest transient clatter spikes.
     - **Traffic Rumble:** Intense `125–500 Hz` low-frequency band-passed rumble demonstrating upward spread of masking.
-    - **Feedback Whistle:** Steady speech-band room tone with an intermittent `~3150 Hz` sine whistle (`±8 Hz` wobble, gated on for `0.75–1.5 s` and off for `0.5–1.1 s`) for demonstrating narrowband acoustic feedback detection without false-triggering transient impulse rules.
+    - **Feedback Whistle:** Steady speech-band room tone with a sustained `~3150 Hz` sine whistle (`±6 Hz` wobble, level slowly swinging every `0.8–1.4 s`) for demonstrating narrowband acoustic feedback detection without false-triggering transient impulse rules.
 - **Start/Stop GDPR-Safe Environment Capture & Hearing Aid Context:**
   - Manual start/stop recording (minimum 2 seconds, automatic safety stop at 10 minutes) that samples spectral frames every 50 ms using a drift-compensated timer and constant-memory running aggregates (band power sums, peak holds, max Crest Factor, possible-feedback frame share and median frequency, and running sums for Centroid, USMR, SPL, and stress — no raw audio stored) and opens a clinical symptom modal (`sharp`, `masking`, `impulses`, `reverb`, `occlusion`, `whistle`), environment selector (`restaurant`, `street`, `office`, `home_tv`, `store`), and **Hearing Aid Context** selector (active program `auto`, `quiet`, `noise`, `music`, `phone`, `other`, `unknown` and volume offset `-3` to `+3` or `unknown`, pre-filled from the last capture via `acousticlog_last_ctx`).
 - **Device Profile & Program/Volume Report Table:**
@@ -38,6 +38,12 @@ Because the audiologist cannot reproduce that exact acoustic scene inside a soun
   - Aggregates all logged events into a **10-Channel Problem-Frequency Heatmap**, program/volume context summary, before/after fitting comparison, and deterministic fine-tuning recommendations formatted for **A4 PDF export / printing** (`@media print`).
 - **JSON Backup, Export & Device Transfer:**
   - Export and import the complete clinical log as a validated `.json` backup file to back up data or move logs between a smartphone and a clinic computer without any cloud account or server.
+- **Editing Entries & Complaints Without a Measurement:**
+  - Every Log History card has an **Edit** button to correct symptoms, environment, hearing aid context or note afterwards; measured values are never changed.
+  - **Log a complaint without measuring** records what bothered the user from memory when the sound is already gone. Such entries are stored with `measured: false` and `metrics: null`: they count toward symptoms and recommendations (with wording that quotes no measured value), but are excluded from measured levels, the heatmap and the before/after level comparison.
+- **Data-Loss Protection:**
+  - After every 5 new entries since the last export, the Log History shows a backup reminder (state in `acousticlog_backup_state`); the app also asks the browser for persistent storage (`navigator.storage.persist()`).
+  - On iPhone/iPad browser tabs it warns that Safari may evict site data after about 7 days without a visit and recommends adding the app to the Home Screen.
 
 ---
 
@@ -229,3 +235,9 @@ AcousticLog uses relative paths (`./`) everywhere and requires **zero build step
 ## 12. License
 
 Released under the **MIT License**. Free for personal, academic, and clinical use.
+
+---
+
+## 13. Author & Contact
+
+Made by **András Tóth** — for questions, feedback or collaboration, reach out on [LinkedIn](https://www.linkedin.com/in/andr%C3%A1s-t%C3%B3th-2743b073/).

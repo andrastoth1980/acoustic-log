@@ -274,7 +274,7 @@
 
             <button type="button" id="btn-synth-feedback" class="p-3 rounded-lg bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-fuchsia-500/50 text-left flex flex-col items-center sm:items-start justify-between gap-1">
               <span class="text-xs font-bold text-fuchsia-300" data-i18n="synth.feedback">Sim: Feedback Whistle</span>
-              <span class="text-[11px] text-slate-400 leading-tight" data-i18n="synth.feedback.desc">Quiet room tone + intermittent ~3.15 kHz narrowband acoustic feedback whistle</span>
+              <span class="text-[11px] text-slate-400 leading-tight" data-i18n="synth.feedback.desc">Quiet room tone + sustained, slightly fluctuating ~3.15 kHz narrowband feedback whistle</span>
             </button>
 
             <button type="button" id="btn-synth-stop" class="p-3 rounded-lg bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-500/40 text-center flex flex-col items-center justify-center gap-1">
@@ -294,6 +294,7 @@
               <span id="btn-capture-label" data-i18n="capture.button">Start Capture</span>
             </button>
             <p class="text-xs text-slate-300 text-center" data-i18n="capture.subtext">Continuously samples spectral frames until stopped — no voice or raw audio recorded</p>
+            <button type="button" class="btn-manual-entry w-full py-2 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-rose-500/40 text-xs sm:text-sm font-medium" data-i18n="manual.button">Log a complaint without measuring</button>
           </div>
 
           <!-- Capture Progress Bar & Status -->
@@ -318,6 +319,9 @@
             <p class="text-xs text-slate-400" data-i18n="history.subtitle">Saved spectral fingerprints stored locally on your device</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
+            <button type="button" class="btn-manual-entry px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/40" data-i18n="manual.button">
+              Log a complaint without measuring
+            </button>
             <button type="button" id="btn-load-sample" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/40" data-i18n="history.load_sample">
               Load Sample Clinical Data
             </button>
@@ -334,6 +338,14 @@
           </div>
         </div>
         <p id="backup-hint" class="text-[11px] text-slate-400 pt-2 border-t border-slate-800/80" data-i18n="history.backup.hint">Data stays only on this device. Use Export to back up or move your log to another phone/computer; for a PDF report, use the Print button → "Save as PDF".</p>
+        <p id="storage-warning" class="hidden text-[11px] text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2" data-i18n="backup.ios_warning">iPhone/iPad: Safari may delete this site’s data if you don’t open it for about 7 days. Add AcousticLog to your Home Screen (Share → Add to Home Screen) and export a backup regularly.</p>
+        <div id="backup-reminder" class="hidden flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-cyan-100 bg-cyan-500/10 border border-cyan-500/40 rounded-lg px-3 py-2.5" role="status">
+          <span id="backup-reminder-text" class="flex-1"></span>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" id="btn-backup-now" class="px-3 py-1.5 rounded-md font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950" data-i18n="backup.export_now">Export backup now</button>
+            <button type="button" id="btn-backup-later" class="px-3 py-1.5 rounded-md font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700" data-i18n="backup.later">Later</button>
+          </div>
+        </div>
       </div>
 
       <!-- Empty State -->
@@ -510,13 +522,13 @@
       <div class="flex items-start justify-between gap-4 border-b border-slate-800 pb-3">
         <div>
           <h2 id="modal-title-heading" class="text-lg font-bold text-white" data-i18n="modal.title">Log Acoustic Event &amp; Symptoms</h2>
-          <p class="text-xs text-slate-400 mt-0.5" data-i18n="modal.subtitle">Spectral fingerprint captured. Select what bothered your hearing aids:</p>
+          <p id="modal-subtitle" class="text-xs text-slate-400 mt-0.5" data-i18n="modal.subtitle">Spectral fingerprint captured. Select what bothered your hearing aids:</p>
         </div>
       </div>
 
       <!-- Measured Acoustic Summary -->
       <div class="space-y-2">
-        <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-400" data-i18n="modal.measured_summary">Measured Acoustic Summary (Average &amp; Peaks)</h3>
+        <h3 id="modal-summary-heading" class="text-xs font-bold uppercase tracking-wider text-cyan-400" data-i18n="modal.measured_summary">Measured Acoustic Summary (Average &amp; Peaks)</h3>
         <div id="modal-summary" class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs"></div>
       </div>
 
@@ -675,6 +687,7 @@
     <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs text-slate-400">
       <p data-i18n="app.privacy">100% Client-Side &amp; GDPR Compliant: No raw audio is ever recorded, stored, or transmitted. Only numerical spectral fingerprints are saved locally in your browser.</p>
       <p class="text-slate-500" data-i18n="app.disclaimer">Clinical decision-support tool for hearing aid wearers and audiologists. Estimates are uncalibrated relative to a Type-1 sound level meter.</p>
+      <p class="shrink-0 whitespace-nowrap"><span data-i18n="footer.made_by">Made by</span> <a href="https://www.linkedin.com/in/andr%C3%A1s-t%C3%B3th-2743b073/" target="_blank" rel="noopener noreferrer" class="font-semibold text-cyan-300 hover:text-cyan-200 underline underline-offset-2">András Tóth · LinkedIn</a></p>
     </div>
   </footer>
 

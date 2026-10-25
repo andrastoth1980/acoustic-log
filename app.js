@@ -1,5 +1,5 @@
 if (typeof window === 'undefined') {
-  const CACHE_NAME = 'acousticlog-pwa-v2';
+  const CACHE_NAME = 'acousticlog-pwa-v3';
   const CORE_ASSETS = [
     './',
     './index.html',
@@ -103,6 +103,8 @@ if (typeof window === 'undefined') {
   const STORAGE_KEY_LAST_CTX = 'acousticlog_last_ctx';
   const STORAGE_KEY_DEVICE = 'acousticlog_device';
   const STORAGE_KEY_FITTINGS = 'acousticlog_fittings';
+  const STORAGE_KEY_BACKUP = 'acousticlog_backup_state';
+  const BACKUP_REMIND_EVERY = 5;
   const SYMPTOM_IDS = ['sharp', 'masking', 'impulses', 'reverb', 'occlusion', 'whistle'];
   const ENV_IDS = ['restaurant', 'street', 'office', 'home_tv', 'store'];
   const PROGRAM_IDS = ['auto', 'quiet', 'noise', 'music', 'phone', 'other', 'unknown'];
@@ -223,6 +225,11 @@ if (typeof window === 'undefined') {
         ? window.I18N.t('rule.RULE_FEEDBACK.text', { hz })
         : window.I18N.t('rule.RULE_FEEDBACK.text_nohz');
     }
+    const NUMERIC_PARAM = { RULE_MPO_HIGH: 'band', RULE_TRANSIENT: 'cf', RULE_MASKING: 'usmr' };
+    const paramKey = NUMERIC_PARAM[r.id];
+    if (paramKey && !(typeof r[paramKey] === 'number' && Number.isFinite(r[paramKey]))) {
+      return window.I18N.t(`rule.${r.id}.text_nodata`);
+    }
     const displayParams = { ...r };
     if (typeof displayParams.db === 'number' && Number.isFinite(displayParams.db)) {
       displayParams.db = Math.abs(displayParams.db);
@@ -296,6 +303,34 @@ if (typeof window === 'undefined') {
    * Deterministic Clinical Rule Engine.
    * Pure function of record metrics & symptomIds. Returns language-agnostic ruleTriggers.
    */
+  /**
+   * True when the record carries an acoustic measurement. Complaints logged from memory
+   * are stored with `measured: false` and `metrics: null`.
+   */
+  function isMeasured(record) {
+    return !!(
+      record &&
+      record.measured !== false &&
+      record.metrics &&
+      Array.isArray(record.metrics.bands)
+    );
+  }
+
+  /**
+   * iOS/iPadOS browser tab (not launched from the Home Screen): Safari may evict site data
+   * after ~7 days without a visit, so the user is warned there.
+   */
+  function isIosBrowserTab() {
+    const ua = navigator.userAgent || '';
+    const isIos =
+      /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone =
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      navigator.standalone === true;
+    return isIos && !standalone;
+  }
+
   function evaluateRules(record) {
     const metrics = (record && record.metrics) || {};
     const symptoms = Array.isArray(record && record.symptomIds) ? record.symptomIds : [];
@@ -307,8 +342,13 @@ if (typeof window === 'undefined') {
 
     const triggers = [];
 
+    // Numeric parameters are only attached when they come from a measurement; a rule
+    // triggered by a reported symptom alone renders its `text_nodata` wording instead.
+
     // 1. RULE_MPO_HIGH: centroid > 2500 Hz or symptom 'sharp'
-    if (centroid > 2500 || symptoms.includes('sharp')) {
+    if (bands.length !== 10 && symptoms.includes('sharp')) {
+      triggers.push({ id: 'RULE_MPO_HIGH' });
+    } else if (centroid > 2500 || symptoms.includes('sharp')) {
       const hfCenters = [2000, 3000, 4000, 6000, 8000];
       let loudestBand = 3000;
       let maxHfDb = -Infinity;
@@ -331,19 +371,17 @@ if (typeof window === 'undefined') {
     }
 
     // 2. RULE_TRANSIENT: crest > 14 dB or symptom 'impulses'
-    if (cf > 14 || symptoms.includes('impulses')) {
-      triggers.push({
-        id: 'RULE_TRANSIENT',
-        cf: Math.round(Math.max(cf, 14.2) * 10) / 10
-      });
+    if (cf > 14) {
+      triggers.push({ id: 'RULE_TRANSIENT', cf: Math.round(cf * 10) / 10 });
+    } else if (symptoms.includes('impulses')) {
+      triggers.push({ id: 'RULE_TRANSIENT' });
     }
 
     // 3. RULE_MASKING: usmr > 6 dB or symptom 'masking'
-    if (usmr > 6 || symptoms.includes('masking')) {
-      triggers.push({
-        id: 'RULE_MASKING',
-        usmr: Math.round(Math.max(usmr, 6.2) * 10) / 10
-      });
+    if (usmr > 6) {
+      triggers.push({ id: 'RULE_MASKING', usmr: Math.round(usmr * 10) / 10 });
+    } else if (symptoms.includes('masking')) {
+      triggers.push({ id: 'RULE_MASKING' });
     }
 
     // 4. RULE_OCCLUSION: symptom 'occlusion' (esp. 250-500 Hz buildup)
@@ -385,6 +423,9 @@ if (typeof window === 'undefined') {
    * Generates translated clinical insight bullets for a record.
    */
   function getRecordInsights(record) {
+    if (!isMeasured(record)) {
+      return [window.I18N.t('manual.insight')];
+    }
     const m = (record && record.metrics) || {};
     const centroid = Math.round(Number(m.centroid) || 0);
     const cf = Math.round((Number(m.cf ?? m.crest) || 0) * 10) / 10;
@@ -422,6 +463,7 @@ if (typeof window === 'undefined') {
 
   /**
    * Validates and normalizes a single imported log record.
+   * Records with `measured: false` (complaints logged without a measurement) carry no metrics.
    * Returns a clean record object or null if invalid.
    */
   function validateLogRecord(rec) {
@@ -438,66 +480,81 @@ if (typeof window === 'undefined') {
       return null;
     }
 
-    const m = rec.metrics;
-    if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
-    if (
-      !Array.isArray(m.bands) ||
-      m.bands.length !== 10 ||
-      !m.bands.every((v) => typeof v === 'number' && Number.isFinite(v))
-    ) {
-      return null;
-    }
+    const isFiniteNum = (v) => typeof v === 'number' && Number.isFinite(v);
+    const measured = rec.measured !== false;
 
-    let peaks;
-    if (m.peaks !== undefined) {
+    let cleanMetrics = null;
+    let dominantBand = null;
+    if (measured) {
+      const m = rec.metrics;
+      if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
+      if (!Array.isArray(m.bands) || m.bands.length !== 10 || !m.bands.every(isFiniteNum)) {
+        return null;
+      }
       if (
-        !Array.isArray(m.peaks) ||
-        m.peaks.length !== 10 ||
-        !m.peaks.every((v) => typeof v === 'number' && Number.isFinite(v))
+        m.peaks !== undefined &&
+        (!Array.isArray(m.peaks) || m.peaks.length !== 10 || !m.peaks.every(isFiniteNum))
       ) {
         return null;
       }
-      peaks = m.peaks.map((v) => Number(v));
-    } else {
-      peaks = m.bands.map((v) => Number(v));
-    }
 
-    for (const numKey of [
-      'dbSPL',
-      'spl',
-      'cf',
-      'crest',
-      'centroid',
-      'usmr',
-      'stress',
-      'feedbackPct',
-      'feedbackHz',
-      'feedbackProm'
-    ]) {
-      if (m[numKey] !== undefined && (typeof m[numKey] !== 'number' || !Number.isFinite(m[numKey]))) {
-        return null;
+      for (const numKey of [
+        'dbSPL',
+        'spl',
+        'cf',
+        'crest',
+        'centroid',
+        'usmr',
+        'stress',
+        'feedbackPct',
+        'feedbackHz',
+        'feedbackProm'
+      ]) {
+        if (m[numKey] !== undefined && !isFiniteNum(m[numKey])) return null;
       }
-    }
 
-    const dbSPL = m.dbSPL !== undefined ? m.dbSPL : m.spl;
-    const cf = m.cf !== undefined ? m.cf : m.crest;
-    const centroid = m.centroid;
-    const usmr = m.usmr;
-    const stress = m.stress !== undefined ? m.stress : 0;
+      const dbSPL = m.dbSPL !== undefined ? m.dbSPL : m.spl;
+      const cf = m.cf !== undefined ? m.cf : m.crest;
+      const stress = m.stress !== undefined ? m.stress : 0;
+      if (![dbSPL, cf, m.centroid, m.usmr, stress].every(isFiniteNum)) return null;
 
-    if (
-      typeof dbSPL !== 'number' ||
-      !Number.isFinite(dbSPL) ||
-      typeof cf !== 'number' ||
-      !Number.isFinite(cf) ||
-      typeof centroid !== 'number' ||
-      !Number.isFinite(centroid) ||
-      typeof usmr !== 'number' ||
-      !Number.isFinite(usmr) ||
-      typeof stress !== 'number' ||
-      !Number.isFinite(stress)
-    ) {
-      return null;
+      const bands = m.bands.map((v) => Number(v));
+      cleanMetrics = {
+        bands,
+        peaks: m.peaks !== undefined ? m.peaks.map((v) => Number(v)) : bands.slice(),
+        dbSPL,
+        cf,
+        centroid: m.centroid,
+        usmr: m.usmr,
+        stress
+      };
+      if (m.feedbackPct !== undefined) {
+        cleanMetrics.feedbackPct = Math.max(0, Math.min(100, Math.round(m.feedbackPct)));
+      }
+      if (m.feedbackHz !== undefined) {
+        cleanMetrics.feedbackHz = Math.max(0, Math.round(m.feedbackHz));
+      }
+      if (m.feedbackProm !== undefined) {
+        cleanMetrics.feedbackProm = Math.max(0, Math.round(m.feedbackProm * 10) / 10);
+      }
+
+      if (rec.dominantBand !== undefined && rec.dominantBand !== null) {
+        if (!isFiniteNum(rec.dominantBand) || rec.dominantBand <= 0) return null;
+        dominantBand = rec.dominantBand;
+      } else {
+        let domIdx = 0;
+        let maxB = -Infinity;
+        for (let b = 0; b < bands.length; b++) {
+          if (bands[b] > maxB) {
+            maxB = bands[b];
+            domIdx = b;
+          }
+        }
+        dominantBand =
+          typeof DSPEngine !== 'undefined' && DSPEngine.BANDS && DSPEngine.BANDS[domIdx]
+            ? DSPEngine.BANDS[domIdx].center
+            : 1000;
+      }
     }
 
     let note = '';
@@ -506,55 +563,10 @@ if (typeof window === 'undefined') {
       note = rec.note.slice(0, 1000);
     }
 
-    let durationSec;
-    if (rec.durationSec !== undefined) {
-      if (
-        typeof rec.durationSec !== 'number' ||
-        !Number.isFinite(rec.durationSec) ||
-        rec.durationSec < 0
-      ) {
+    for (const optKey of ['durationSec', 'frameCount', 'editedAt']) {
+      if (rec[optKey] !== undefined && (!isFiniteNum(rec[optKey]) || rec[optKey] < 0)) {
         return null;
       }
-      durationSec = rec.durationSec;
-    }
-
-    let frameCount;
-    if (rec.frameCount !== undefined) {
-      if (
-        typeof rec.frameCount !== 'number' ||
-        !Number.isFinite(rec.frameCount) ||
-        rec.frameCount < 0
-      ) {
-        return null;
-      }
-      frameCount = Math.round(rec.frameCount);
-    }
-
-    const bands = m.bands.map((v) => Number(v));
-
-    let dominantBand;
-    if (rec.dominantBand !== undefined && rec.dominantBand !== null) {
-      if (
-        typeof rec.dominantBand !== 'number' ||
-        !Number.isFinite(rec.dominantBand) ||
-        rec.dominantBand <= 0
-      ) {
-        return null;
-      }
-      dominantBand = rec.dominantBand;
-    } else {
-      let domIdx = 0;
-      let maxB = -Infinity;
-      for (let b = 0; b < bands.length; b++) {
-        if (bands[b] > maxB) {
-          maxB = bands[b];
-          domIdx = b;
-        }
-      }
-      dominantBand =
-        typeof DSPEngine !== 'undefined' && DSPEngine.BANDS && DSPEngine.BANDS[domIdx]
-          ? DSPEngine.BANDS[domIdx].center
-          : 1000;
     }
 
     let ruleTriggers;
@@ -568,7 +580,7 @@ if (typeof window === 'undefined') {
         const cleanTrig = { id: trig.id };
         for (const k of ['band', 'db', 'cf', 'usmr', 'spl', 'hz']) {
           if (trig[k] !== undefined) {
-            if (typeof trig[k] !== 'number' || !Number.isFinite(trig[k])) return null;
+            if (!isFiniteNum(trig[k])) return null;
             cleanTrig[k] = trig[k];
           }
         }
@@ -584,35 +596,13 @@ if (typeof window === 'undefined') {
       const vol = rec.context.volumeStep;
       let cleanVol = null;
       if (vol !== null && vol !== undefined) {
-        if (typeof vol !== 'number' || !Number.isFinite(vol) || !VOLUME_STEPS.includes(vol)) {
-          return null;
-        }
+        if (!isFiniteNum(vol) || !VOLUME_STEPS.includes(vol)) return null;
         cleanVol = vol;
       }
       cleanContext = {
         programId: progId,
         volumeStep: cleanVol
       };
-    }
-
-    const cleanMetrics = {
-      bands,
-      peaks,
-      dbSPL,
-      cf,
-      centroid,
-      usmr,
-      stress
-    };
-
-    if (m.feedbackPct !== undefined) {
-      cleanMetrics.feedbackPct = Math.max(0, Math.min(100, Math.round(m.feedbackPct)));
-    }
-    if (m.feedbackHz !== undefined) {
-      cleanMetrics.feedbackHz = Math.max(0, Math.round(m.feedbackHz));
-    }
-    if (m.feedbackProm !== undefined) {
-      cleanMetrics.feedbackProm = Math.max(0, Math.round(m.feedbackProm * 10) / 10);
     }
 
     const cleanRecord = {
@@ -625,14 +615,20 @@ if (typeof window === 'undefined') {
       dominantBand
     };
 
+    if (!measured) {
+      cleanRecord.measured = false;
+    }
     if (cleanContext !== undefined) {
       cleanRecord.context = cleanContext;
     }
-    if (durationSec !== undefined) {
-      cleanRecord.durationSec = durationSec;
+    if (measured && rec.durationSec !== undefined) {
+      cleanRecord.durationSec = rec.durationSec;
     }
-    if (frameCount !== undefined) {
-      cleanRecord.frameCount = frameCount;
+    if (measured && rec.frameCount !== undefined) {
+      cleanRecord.frameCount = Math.round(rec.frameCount);
+    }
+    if (rec.editedAt !== undefined) {
+      cleanRecord.editedAt = rec.editedAt;
     }
 
     cleanRecord.ruleTriggers =
@@ -808,6 +804,7 @@ if (typeof window === 'undefined') {
     pendingCapture: null,
     lastFocusedElement: null,
     toastTimer: null,
+    persistRequested: false,
 
     init() {
       if (
@@ -837,6 +834,7 @@ if (typeof window === 'undefined') {
       this.updateStatusUI();
       this.renderHistory();
       this.renderReport();
+      this._renderBackupUI();
 
       this._startRenderLoop();
     },
@@ -860,10 +858,10 @@ if (typeof window === 'undefined') {
         this._saveLogsToStorage();
         return false;
       } else {
+        // Rules are a pure function of the record, so re-deriving them keeps stored entries
+        // in step with the current rule engine
         this.logs = loaded.map((item) => {
-          if (!Array.isArray(item.ruleTriggers) || item.ruleTriggers.length === 0) {
-            item.ruleTriggers = evaluateRules(item);
-          }
+          item.ruleTriggers = evaluateRules(item);
           return item;
         });
         return true;
@@ -1042,6 +1040,7 @@ if (typeof window === 'undefined') {
         }
         this.renderHistory();
         this.renderReport();
+        this._renderBackupUI();
         if (this.pendingCapture && !document.getElementById('capture-modal').classList.contains('hidden')) {
           this._renderModalSummary();
         }
@@ -1204,6 +1203,21 @@ if (typeof window === 'undefined') {
           }
         }
       });
+
+      // Complaint without measurement (analyzer card + history header)
+      document.querySelectorAll('.btn-manual-entry').forEach((btn) => {
+        btn.addEventListener('click', () => this.openManualEntry());
+      });
+
+      // Backup reminder
+      const btnBackupNow = document.getElementById('btn-backup-now');
+      if (btnBackupNow) {
+        btnBackupNow.addEventListener('click', () => this.exportLogsJson());
+      }
+      const btnBackupLater = document.getElementById('btn-backup-later');
+      if (btnBackupLater) {
+        btnBackupLater.addEventListener('click', () => this._snoozeBackupReminder());
+      }
 
       // History buttons
       const btnExportJson = document.getElementById('btn-export-json');
@@ -2194,6 +2208,7 @@ if (typeof window === 'undefined') {
       const dominantBand = DSPEngine.BANDS[domIdx].center;
 
       this.pendingCapture = {
+        mode: 'capture',
         durationSec,
         frameCount,
         metrics: {
@@ -2221,51 +2236,122 @@ if (typeof window === 'undefined') {
       this.openModal();
     },
 
-    openModal() {
-      if (!this.pendingCapture) return;
-      this.lastFocusedElement = document.activeElement;
+    /** Opens the symptom modal for a complaint logged from memory (no acoustic data). */
+    openManualEntry() {
+      if (this.isCapturing) return;
+      this.pendingCapture = { mode: 'manual', metrics: null, dominantBand: null };
+      this.openModal();
+    },
 
-      const m = this.pendingCapture.metrics;
-      const src = this.engine.getSource();
-
-      // Pre-select suggested symptoms based on measured acoustic thresholds
-      const suggestedSymptoms = new Set();
-      if (m.feedbackPct >= 10) suggestedSymptoms.add('whistle');
-      if (m.centroid > 2500) suggestedSymptoms.add('sharp');
-      if (m.cf > 14 && !(m.feedbackPct >= 50 && m.cf < 18)) {
-        suggestedSymptoms.add('impulses');
+    /** Opens the symptom modal pre-filled with an existing record; measured values stay as stored. */
+    openEditEntry(id) {
+      const rec = this.logs.find((r) => r && r.id === id);
+      if (!rec) {
+        this.showToast(window.I18N.t('edit.not_found'), true);
+        return;
       }
-      if (m.usmr > 6) suggestedSymptoms.add('masking');
-      if (suggestedSymptoms.size === 0) suggestedSymptoms.add('sharp');
+      this.pendingCapture = {
+        mode: 'edit',
+        recordId: id,
+        metrics: isMeasured(rec) ? rec.metrics : null,
+        dominantBand: isMeasured(rec) ? rec.dominantBand : null
+      };
+      this.openModal();
+    },
 
+    _applyModalMode(mode) {
+      const keys = {
+        capture: ['modal.title', 'modal.subtitle', 'modal.measured_summary', 'modal.save'],
+        manual: ['manual.title', 'manual.subtitle', 'manual.summary_heading', 'modal.save'],
+        edit: ['edit.title', 'edit.subtitle', 'modal.measured_summary', 'edit.save']
+      }[mode];
+      ['modal-title-heading', 'modal-subtitle', 'modal-summary-heading', 'btn-modal-save'].forEach(
+        (elId, i) => {
+          const el = document.getElementById(elId);
+          if (el) {
+            el.setAttribute('data-i18n', keys[i]);
+            el.textContent = window.I18N.t(keys[i]);
+          }
+        }
+      );
+    },
+
+    _prefillModalFields({ symptomIds, envId, context, note }) {
+      const symptomSet = new Set(symptomIds);
       document.querySelectorAll('input[name="symptom"]').forEach((chk) => {
-        chk.checked = suggestedSymptoms.has(chk.value);
+        chk.checked = symptomSet.has(chk.value);
       });
-
-      const defaultEnv =
-        src === 'synth:traffic'
-          ? 'street'
-          : src === 'synth:feedback'
-            ? 'home_tv'
-            : 'restaurant';
       document.querySelectorAll('input[name="env"]').forEach((rad) => {
-        rad.checked = rad.value === defaultEnv;
+        rad.checked = rad.value === envId;
       });
-
-      const lastCtx = this._loadLastContext();
       document.querySelectorAll('input[name="program"]').forEach((rad) => {
-        rad.checked = rad.value === lastCtx.programId;
+        rad.checked = rad.value === context.programId;
       });
       const volSelect = document.getElementById('modal-volume');
       if (volSelect) {
         volSelect.value =
-          lastCtx.volumeStep !== null && VOLUME_STEPS.includes(lastCtx.volumeStep)
-            ? String(lastCtx.volumeStep)
+          context.volumeStep !== null && VOLUME_STEPS.includes(context.volumeStep)
+            ? String(context.volumeStep)
             : 'unknown';
       }
-
       const noteEl = document.getElementById('modal-note');
-      if (noteEl) noteEl.value = '';
+      if (noteEl) noteEl.value = note;
+    },
+
+    openModal() {
+      if (!this.pendingCapture) return;
+      this.lastFocusedElement = document.activeElement;
+
+      const mode = this.pendingCapture.mode || 'capture';
+      this._applyModalMode(mode);
+
+      if (mode === 'edit') {
+        const rec = this.logs.find((r) => r && r.id === this.pendingCapture.recordId) || {};
+        const rawNote = typeof rec.note === 'string' ? rec.note : '';
+        this._prefillModalFields({
+          symptomIds: rec.symptomIds || [],
+          envId: rec.envId || 'restaurant',
+          context:
+            rec.context && typeof rec.context === 'object'
+              ? rec.context
+              : { programId: 'unknown', volumeStep: null },
+          // Sample notes are stored as i18n keys; show the translated text
+          note: rawNote.startsWith('sample.') ? window.I18N.t(rawNote) : rawNote
+        });
+      } else if (mode === 'manual') {
+        this._prefillModalFields({
+          symptomIds: [],
+          envId: 'restaurant',
+          context: this._loadLastContext(),
+          note: ''
+        });
+      } else {
+        const m = this.pendingCapture.metrics;
+        const src = this.engine.getSource();
+
+        // Pre-select suggested symptoms based on measured acoustic thresholds
+        const suggestedSymptoms = new Set();
+        if (m.feedbackPct >= 10) suggestedSymptoms.add('whistle');
+        if (m.centroid > 2500) suggestedSymptoms.add('sharp');
+        if (m.cf > 14 && !(m.feedbackPct >= 50 && m.cf < 18)) {
+          suggestedSymptoms.add('impulses');
+        }
+        if (m.usmr > 6) suggestedSymptoms.add('masking');
+        if (suggestedSymptoms.size === 0) suggestedSymptoms.add('sharp');
+
+        const defaultEnv =
+          src === 'synth:traffic'
+            ? 'street'
+            : src === 'synth:feedback'
+              ? 'home_tv'
+              : 'restaurant';
+        this._prefillModalFields({
+          symptomIds: [...suggestedSymptoms],
+          envId: defaultEnv,
+          context: this._loadLastContext(),
+          note: ''
+        });
+      }
 
       this._syncModalChips();
       this._renderModalSummary();
@@ -2338,6 +2424,7 @@ if (typeof window === 'undefined') {
       const dom = this.pendingCapture.dominantBand;
       const symptomIds = this._getSelectedModalSymptoms();
       const previewRules = evaluateRules({
+        measured: !!m,
         metrics: m,
         symptomIds,
         dominantBand: dom
@@ -2364,6 +2451,16 @@ if (typeof window === 'undefined') {
                 .join('')}
             </div>`
           : '';
+
+      if (!m) {
+        container.innerHTML = `
+          <div class="text-xs text-slate-300 leading-relaxed">${escapeHtml(
+            window.I18N.t('manual.no_measurement')
+          )}</div>
+          ${rulesHtml}
+        `;
+        return;
+      }
 
       container.innerHTML = `
         <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
@@ -2400,17 +2497,43 @@ if (typeof window === 'undefined') {
         return;
       }
 
+      const mode = this.pendingCapture.mode || 'capture';
       const envId = this._getSelectedModalEnv();
       const context = this._getSelectedModalContext();
-      this._saveLastContext(context);
       const noteEl = document.getElementById('modal-note');
       const rawNote = noteEl ? noteEl.value.trim().slice(0, 500) : '';
 
+      if (mode === 'edit') {
+        const rec = this.logs.find((r) => r && r.id === this.pendingCapture.recordId);
+        if (!rec) {
+          this.closeModal();
+          this.showToast(window.I18N.t('edit.not_found'), true);
+          return;
+        }
+        rec.envId = envId;
+        rec.symptomIds = symptomIds;
+        rec.context = context;
+        // Keep an untouched sample note as its i18n key so it still translates
+        const keepSampleKey =
+          typeof rec.note === 'string' &&
+          rec.note.startsWith('sample.') &&
+          rawNote === window.I18N.t(rec.note);
+        if (!keepSampleKey) rec.note = rawNote;
+        rec.editedAt = Date.now();
+        rec.ruleTriggers = evaluateRules(rec);
+
+        this._saveLogsToStorage();
+        this.closeModal();
+        this.renderHistory();
+        this.renderReport();
+        this.showToast(window.I18N.t('edit.saved'));
+        return;
+      }
+
+      this._saveLastContext(context);
       const newRecord = {
         id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         timestamp: Date.now(),
-        durationSec: this.pendingCapture.durationSec,
-        frameCount: this.pendingCapture.frameCount,
         envId,
         symptomIds,
         context,
@@ -2419,15 +2542,90 @@ if (typeof window === 'undefined') {
         dominantBand: this.pendingCapture.dominantBand,
         ruleTriggers: []
       };
+      if (mode === 'manual') {
+        newRecord.measured = false;
+      } else {
+        newRecord.durationSec = this.pendingCapture.durationSec;
+        newRecord.frameCount = this.pendingCapture.frameCount;
+      }
       newRecord.ruleTriggers = evaluateRules(newRecord);
 
       this.logs.unshift(newRecord);
       this._saveLogsToStorage();
       this.closeModal();
 
+      this._noteNewEntry();
       this.renderHistory();
       this.renderReport();
       this.switchTab('history');
+      if (mode === 'manual') {
+        this.showToast(window.I18N.t('manual.saved'));
+      }
+    },
+
+    /* ======================================================================
+       DATA-LOSS PROTECTION (backup reminder, persistent storage, iOS warning)
+       ====================================================================== */
+    _loadBackupState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY_BACKUP) || 'null');
+        if (parsed && typeof parsed === 'object') {
+          return {
+            sinceBackup: Number.isFinite(parsed.sinceBackup) ? parsed.sinceBackup : 0,
+            snoozeUntil: Number.isFinite(parsed.snoozeUntil) ? parsed.snoozeUntil : 0
+          };
+        }
+      } catch (e) {
+        // Ignore storage errors
+      }
+      return { sinceBackup: 0, snoozeUntil: 0 };
+    },
+
+    _saveBackupState(state) {
+      try {
+        localStorage.setItem(STORAGE_KEY_BACKUP, JSON.stringify(state));
+      } catch (e) {
+        // Ignore storage errors
+      }
+    },
+
+    /** Counts a user-created entry towards the backup reminder and asks for persistent storage. */
+    _noteNewEntry() {
+      const state = this._loadBackupState();
+      state.sinceBackup++;
+      this._saveBackupState(state);
+      this._renderBackupUI();
+
+      if (!this.persistRequested && navigator.storage && navigator.storage.persist) {
+        this.persistRequested = true;
+        navigator.storage
+          .persisted()
+          .then((already) => (already ? true : navigator.storage.persist()))
+          .catch(() => {});
+      }
+    },
+
+    _snoozeBackupReminder() {
+      const state = this._loadBackupState();
+      state.snoozeUntil = state.sinceBackup + BACKUP_REMIND_EVERY;
+      this._saveBackupState(state);
+      this._renderBackupUI();
+    },
+
+    _renderBackupUI() {
+      const warningEl = document.getElementById('storage-warning');
+      if (warningEl) warningEl.classList.toggle('hidden', !isIosBrowserTab());
+
+      const reminderEl = document.getElementById('backup-reminder');
+      const textEl = document.getElementById('backup-reminder-text');
+      if (!reminderEl) return;
+      const state = this._loadBackupState();
+      const show =
+        state.sinceBackup >= BACKUP_REMIND_EVERY && state.sinceBackup >= state.snoozeUntil;
+      reminderEl.classList.toggle('hidden', !show);
+      if (show && textEl) {
+        textEl.textContent = window.I18N.t('backup.reminder', { n: state.sinceBackup });
+      }
     },
 
     /* ======================================================================
@@ -2461,6 +2659,9 @@ if (typeof window === 'undefined') {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+
+      this._saveBackupState({ sinceBackup: 0, snoozeUntil: 0 });
+      this._renderBackupUI();
 
       const exportKey =
         this.logs.length === 1 ? 'history.export.done_one' : 'history.export.done';
@@ -2685,17 +2886,22 @@ if (typeof window === 'undefined') {
             `;
           }
           const entry = item.entry;
+          const measured = isMeasured(entry);
           const m = entry.metrics || {};
           const bands = Array.isArray(m.bands) ? m.bands : new Array(10).fill(0);
           const domHz = entry.dominantBand || 1000;
           const dateStr = window.I18N.formatDate(entry.timestamp);
           const envLabel = window.I18N.t(`env.${entry.envId || 'restaurant'}`);
-          const durationHtml =
-            typeof entry.durationSec === 'number' && Number.isFinite(entry.durationSec)
-              ? `<span class="px-2 py-0.5 rounded text-xs font-mono bg-slate-800 text-slate-300 border border-slate-700">${escapeHtml(
-                  window.I18N.t('capture.duration', { time: formatDuration(entry.durationSec) })
-                )}</span>`
-              : '';
+          let durationHtml = '';
+          if (!measured) {
+            durationHtml = `<span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30">${escapeHtml(
+              window.I18N.t('manual.badge')
+            )}</span>`;
+          } else if (typeof entry.durationSec === 'number' && Number.isFinite(entry.durationSec)) {
+            durationHtml = `<span class="px-2 py-0.5 rounded text-xs font-mono bg-slate-800 text-slate-300 border border-slate-700">${escapeHtml(
+              window.I18N.t('capture.duration', { time: formatDuration(entry.durationSec) })
+            )}</span>`;
+          }
 
           const symptomsHtml = (entry.symptomIds || [])
             .map(
@@ -2779,14 +2985,29 @@ if (typeof window === 'undefined') {
                     ${symptomsHtml}
                   </div>
                 </div>
-                <button type="button" data-delete-id="${escapeHtml(
-                  entry.id
-                )}" class="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40">
-                  ${escapeHtml(window.I18N.t('history.delete'))}
-                </button>
+                <div class="flex items-center gap-2">
+                  <button type="button" data-edit-id="${escapeHtml(
+                    entry.id
+                  )}" class="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-200 border border-slate-700 hover:border-cyan-500/40">
+                    ${escapeHtml(window.I18N.t('edit.button'))}
+                  </button>
+                  <button type="button" data-delete-id="${escapeHtml(
+                    entry.id
+                  )}" class="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40">
+                    ${escapeHtml(window.I18N.t('history.delete'))}
+                  </button>
+                </div>
               </div>
 
-              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+              ${
+                measured
+                  ? ''
+                  : `<div class="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-slate-300">${escapeHtml(
+                      window.I18N.t('manual.no_measurement')
+                    )}</div>`
+              }
+
+              <div class="${measured ? '' : 'hidden '}grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
                 <div class="lg:col-span-5 space-y-1.5">
                   <div class="flex items-center justify-between text-xs">
                     <span class="text-slate-400 font-medium">${escapeHtml(
@@ -2876,6 +3097,10 @@ if (typeof window === 'undefined') {
 
       listEl.innerHTML = cardsHtml;
 
+      listEl.querySelectorAll('[data-edit-id]').forEach((btn) => {
+        btn.addEventListener('click', () => this.openEditEntry(btn.getAttribute('data-edit-id')));
+      });
+
       listEl.querySelectorAll('[data-delete-id]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const id = btn.getAttribute('data-delete-id');
@@ -2953,15 +3178,20 @@ if (typeof window === 'undefined') {
         return;
       }
 
+      // Complaints logged without a measurement count for symptoms/recommendations only
+      const measuredLogs = this.logs.filter(isMeasured);
+      const nMeasured = measuredLogs.length;
+      const nUnmeasured = nEvents - nMeasured;
+
       let splSum = 0;
       let stressSum = 0;
-      for (let i = 0; i < nEvents; i++) {
-        const m = this.logs[i].metrics || {};
+      for (let i = 0; i < nMeasured; i++) {
+        const m = measuredLogs[i].metrics;
         splSum += Number(m.dbSPL ?? m.spl) || 0;
         stressSum += Number(m.stress) || 0;
       }
-      const meanSpl = Math.round((splSum / nEvents) * 10) / 10;
-      const meanStress = Math.round(stressSum / nEvents);
+      const meanSpl = nMeasured > 0 ? Math.round((splSum / nMeasured) * 10) / 10 : 0;
+      const meanStress = nMeasured > 0 ? Math.round(stressSum / nMeasured) : 0;
 
       if (elAvgSpl) elAvgSpl.textContent = window.I18N.t('report.avg_spl', { spl: meanSpl });
       if (elAvgStress) {
@@ -2974,9 +3204,9 @@ if (typeof window === 'undefined') {
       const bandPowerSum = new Array(nBands).fill(0);
       const bandMaxPeak = new Array(nBands).fill(0);
 
-      for (let e = 0; e < nEvents; e++) {
-        const rec = this.logs[e];
-        const m = rec.metrics || {};
+      for (let e = 0; e < nMeasured; e++) {
+        const rec = measuredLogs[e];
+        const m = rec.metrics;
         const bands = Array.isArray(m.bands) ? m.bands : [];
         const peaks = Array.isArray(m.peaks) ? m.peaks : [];
         const syms = Array.isArray(rec.symptomIds) ? rec.symptomIds : [];
@@ -3007,10 +3237,24 @@ if (typeof window === 'undefined') {
         }
       }
 
-      elHeatmap.innerHTML = DSPEngine.BANDS.map((bDef, b) => {
-        const scorePct = Math.min(100, Math.round((bandIncidentCount[b] / nEvents) * 100));
+      const unmeasuredNoteHtml =
+        nUnmeasured > 0
+          ? `<div class="col-span-full text-[11px] text-amber-200 print-text-muted bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">${escapeHtml(
+              window.I18N.t(
+                nUnmeasured === 1 ? 'report.unmeasured_note_one' : 'report.unmeasured_note',
+                { n: nUnmeasured }
+              )
+            )}</div>`
+          : '';
+
+      elHeatmap.innerHTML = nMeasured === 0
+        ? `<div class="col-span-full text-xs text-slate-400 print-text-muted py-4">${escapeHtml(
+            window.I18N.t('report.no_data')
+          )}</div>${unmeasuredNoteHtml}`
+        : DSPEngine.BANDS.map((bDef, b) => {
+        const scorePct = Math.min(100, Math.round((bandIncidentCount[b] / nMeasured) * 100));
         const meanDb =
-          Math.round(10 * Math.log10(Math.max(1e-12, bandPowerSum[b] / nEvents)) * 10) / 10;
+          Math.round(10 * Math.log10(Math.max(1e-12, bandPowerSum[b] / nMeasured)) * 10) / 10;
         const peakDb = Math.round(bandMaxPeak[b] * 10) / 10;
 
         let heatClass = 'heat-0';
@@ -3036,7 +3280,7 @@ if (typeof window === 'undefined') {
             </div>
           </div>
         `;
-      }).join('');
+      }).join('') + unmeasuredNoteHtml;
 
       // 2. Aggregated Deterministic Fitting Recommendations
       const ruleGroups = new Map();
@@ -3069,22 +3313,30 @@ if (typeof window === 'undefined') {
             const count = items.length;
             const params = {};
 
+            // Only measured parameters are aggregated; symptom-only triggers carry none
+            const measuredVals = (key) =>
+              items.map((it) => it[key]).filter((v) => typeof v === 'number' && Number.isFinite(v));
+
             if (ruleId === 'RULE_MPO_HIGH') {
-              const bandCounts = {};
-              let minDb = -2;
-              items.forEach((it) => {
-                const b = it.band || 3000;
-                bandCounts[b] = (bandCounts[b] || 0) + 1;
-                if (typeof it.db === 'number' && it.db < minDb) minDb = it.db;
-              });
-              params.band = Number(
-                Object.keys(bandCounts).sort((a, b) => bandCounts[b] - bandCounts[a])[0] || 3000
-              );
-              params.db = minDb;
+              const withBand = items.filter((it) => typeof it.band === 'number');
+              if (withBand.length > 0) {
+                const bandCounts = {};
+                let minDb = -2;
+                withBand.forEach((it) => {
+                  bandCounts[it.band] = (bandCounts[it.band] || 0) + 1;
+                  if (typeof it.db === 'number' && it.db < minDb) minDb = it.db;
+                });
+                params.band = Number(
+                  Object.keys(bandCounts).sort((a, b) => bandCounts[b] - bandCounts[a])[0]
+                );
+                params.db = minDb;
+              }
             } else if (ruleId === 'RULE_TRANSIENT') {
-              params.cf = Math.max(...items.map((it) => Number(it.cf) || 14.5));
+              const cfVals = measuredVals('cf');
+              if (cfVals.length > 0) params.cf = Math.max(...cfVals);
             } else if (ruleId === 'RULE_MASKING') {
-              params.usmr = Math.max(...items.map((it) => Number(it.usmr) || 6.5));
+              const usmrVals = measuredVals('usmr');
+              if (usmrVals.length > 0) params.usmr = Math.max(...usmrVals);
             } else if (ruleId === 'RULE_LOUD') {
               params.spl = Math.max(...items.map((it) => Number(it.spl) || 81.0));
             } else if (ruleId === 'RULE_FEEDBACK') {
@@ -3200,7 +3452,7 @@ if (typeof window === 'undefined') {
       if (elContext) {
         const progStats = {};
         PROGRAM_IDS.forEach((pId) => {
-          progStats[pId] = { count: 0, stressSum: 0, volSum: 0, volCount: 0 };
+          progStats[pId] = { count: 0, stressSum: 0, stressCount: 0, volSum: 0, volCount: 0 };
         });
         let volUpCount = 0;
 
@@ -3209,8 +3461,10 @@ if (typeof window === 'undefined') {
           const pId = PROGRAM_IDS.includes(ctx.programId) ? ctx.programId : 'unknown';
           const st = progStats[pId];
           st.count++;
-          const m = rec.metrics || {};
-          st.stressSum += Number(m.stress) || 0;
+          if (isMeasured(rec)) {
+            st.stressSum += Number(rec.metrics.stress) || 0;
+            st.stressCount++;
+          }
           if (typeof ctx.volumeStep === 'number' && Number.isFinite(ctx.volumeStep)) {
             st.volSum += ctx.volumeStep;
             st.volCount++;
@@ -3224,7 +3478,8 @@ if (typeof window === 'undefined') {
         const rowsHtml = activeProgs
           .map((pId) => {
             const st = progStats[pId];
-            const meanProgStress = Math.round(st.stressSum / st.count);
+            const meanProgStressStr =
+              st.stressCount > 0 ? `${Math.round(st.stressSum / st.stressCount)}%` : '—';
             let meanVolStr = '—';
             if (st.volCount > 0) {
               const meanVol = Math.round((st.volSum / st.volCount) * 10) / 10;
@@ -3239,7 +3494,7 @@ if (typeof window === 'undefined') {
                 <td class="py-2 px-3 font-mono text-slate-300 print-text-dark text-right">${
                   st.count
                 }</td>
-                <td class="py-2 px-3 font-mono text-cyan-300 print-text-dark text-right">${meanProgStress}%</td>
+                <td class="py-2 px-3 font-mono text-cyan-300 print-text-dark text-right">${meanProgStressStr}</td>
                 <td class="py-2 pl-3 font-mono text-slate-300 print-text-dark text-right">${escapeHtml(
                   meanVolStr
                 )}</td>
@@ -3315,8 +3570,14 @@ if (typeof window === 'undefined') {
                   <div class="text-slate-300 print-text-dark">${syms}</div>
                 </div>
                 <div class="flex flex-wrap items-center gap-3 font-mono text-slate-300 print-text-dark shrink-0">
-                  <span>${escapeHtml(window.I18N.t('metric.spl.short'))}: <strong>${window.I18N.formatNumber(m.dbSPL ?? m.spl, 1)} dB</strong></span>
-                  <span>${escapeHtml(window.I18N.t('metric.dominant_band'))}: <strong>${rec.dominantBand || 1000} Hz</strong></span>
+                  ${
+                    isMeasured(rec)
+                      ? `<span>${escapeHtml(window.I18N.t('metric.spl.short'))}: <strong>${window.I18N.formatNumber(m.dbSPL ?? m.spl, 1)} dB</strong></span>
+                  <span>${escapeHtml(window.I18N.t('metric.dominant_band'))}: <strong>${rec.dominantBand || 1000} Hz</strong></span>`
+                      : `<span class="text-amber-300 print-text-dark">${escapeHtml(
+                          window.I18N.t('manual.badge')
+                        )}</span>`
+                  }
                 </div>
               </div>
             `;
@@ -3517,15 +3778,19 @@ if (typeof window === 'undefined') {
         const n = events.length;
         let stressSum = 0;
         let splSum = 0;
+        let nMeasuredSide = 0;
         const symCounts = {};
         SYMPTOM_IDS.forEach((s) => (symCounts[s] = 0));
         const ruleCounts = {};
         RULE_IDS.forEach((r) => (ruleCounts[r] = 0));
 
         events.forEach((rec) => {
-          const m = rec.metrics || {};
-          stressSum += Number(m.stress) || 0;
-          splSum += Number(m.dbSPL ?? m.spl) || 0;
+          if (isMeasured(rec)) {
+            const m = rec.metrics;
+            stressSum += Number(m.stress) || 0;
+            splSum += Number(m.dbSPL ?? m.spl) || 0;
+            nMeasuredSide++;
+          }
           (rec.symptomIds || []).forEach((s) => {
             if (s in symCounts) symCounts[s]++;
           });
@@ -3553,8 +3818,9 @@ if (typeof window === 'undefined') {
         return {
           count: n,
           perWeek,
-          meanStress: Math.round(stressSum / n),
-          meanSpl: Math.round((splSum / n) * 10) / 10,
+          // null when this side has only complaints logged without a measurement
+          meanStress: nMeasuredSide > 0 ? Math.round(stressSum / nMeasuredSide) : null,
+          meanSpl: nMeasuredSide > 0 ? Math.round((splSum / nMeasuredSide) * 10) / 10 : null,
           symRates,
           ruleRates
         };
@@ -3617,15 +3883,23 @@ if (typeof window === 'undefined') {
         },
         {
           label: window.I18N.t('compare.stress'),
-          beforeStr: `${bStat.meanStress}%`,
-          afterStr: `${aStat.meanStress}%`,
-          changeHtml: formatChangeCell(bStat.meanStress, aStat.meanStress, 'pctPoints', '%')
+          beforeStr: bStat.meanStress === null ? '—' : `${bStat.meanStress}%`,
+          afterStr: aStat.meanStress === null ? '—' : `${aStat.meanStress}%`,
+          changeHtml:
+            bStat.meanStress === null || aStat.meanStress === null
+              ? '<span class="font-mono text-slate-400 print-text-muted">—</span>'
+              : formatChangeCell(bStat.meanStress, aStat.meanStress, 'pctPoints', '%')
         },
         {
           label: window.I18N.t('compare.spl'),
-          beforeStr: `${window.I18N.formatNumber(bStat.meanSpl, 1)} dB`,
-          afterStr: `${window.I18N.formatNumber(aStat.meanSpl, 1)} dB`,
-          changeHtml: formatChangeCell(bStat.meanSpl, aStat.meanSpl, 'db', ' dB')
+          beforeStr:
+            bStat.meanSpl === null ? '—' : `${window.I18N.formatNumber(bStat.meanSpl, 1)} dB`,
+          afterStr:
+            aStat.meanSpl === null ? '—' : `${window.I18N.formatNumber(aStat.meanSpl, 1)} dB`,
+          changeHtml:
+            bStat.meanSpl === null || aStat.meanSpl === null
+              ? '<span class="font-mono text-slate-400 print-text-muted">—</span>'
+              : formatChangeCell(bStat.meanSpl, aStat.meanSpl, 'db', ' dB')
         }
       ];
 

@@ -489,7 +489,7 @@ class DSPEngine {
 
       this.activeSource = 'synth:traffic';
     } else if (mode === 'feedback') {
-      // FEEDBACK WHISTLE: Steady room tone (pink noise bed) + intermittent ~3150 Hz sine whistle.
+      // FEEDBACK WHISTLE: Steady room tone (pink noise bed) + sustained ~3150 Hz sine whistle with slow level swings.
       // Balanced so the whistle has >30 dB narrowband spectral prominence at 3150 Hz while
       // keeping the 250 ms time-domain Crest Factor around 8–11 dB (below the 14 dB impulse threshold).
       const roomSource = ctx.createBufferSource();
